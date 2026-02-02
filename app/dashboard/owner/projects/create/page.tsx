@@ -53,60 +53,56 @@ export default function CreateProjectPage() {
       })
   }, [])
 
-  const handleImagePick = (filesList: FileList | null) => {
-    if (!filesList) return
-
-    const newItems: UploadItem[] = Array.from(filesList).map(file => ({
+  const handleImagePick = (list: FileList | null) => {
+    if (!list) return
+    const items = Array.from(list).map(file => ({
       id: crypto.randomUUID(),
       file,
       preview: URL.createObjectURL(file),
       caption: '',
     }))
-
-    setImages(prev => [...prev, ...newItems])
+    setImages(prev => [...prev, ...items])
     if (imageInputRef.current) imageInputRef.current.value = ''
   }
 
-  const handleFilePick = (filesList: FileList | null) => {
-    if (!filesList) return
-
-    const newItems: UploadItem[] = Array.from(filesList).map(file => ({
+  const handleFilePick = (list: FileList | null) => {
+    if (!list) return
+    const items = Array.from(list).map(file => ({
       id: crypto.randomUUID(),
       file,
       caption: '',
     }))
-
-    setFiles(prev => [...prev, ...newItems])
+    setFiles(prev => [...prev, ...items])
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const submit = async () => {
     setLoading(true)
-    setSuccessMsg(null)
     setErrorMsg(null)
-
-    const startISO = form.startDate
-      ? new Date(`${form.startDate}T00:00:00.000Z`).toISOString()
-      : ''
-
-    const endISO = form.endDate
-      ? new Date(`${form.endDate}T23:59:59.999Z`).toISOString()
-      : ''
+    setSuccessMsg(null)
 
     const fd = new FormData()
     fd.append('name', form.name)
     fd.append('description', form.description)
-    fd.append('startDate', startISO)
-    fd.append('endDate', endISO)
+    fd.append(
+      'startDate',
+      form.startDate
+        ? new Date(`${form.startDate}T00:00:00Z`).toISOString()
+        : ''
+    )
+    fd.append(
+      'endDate',
+      form.endDate
+        ? new Date(`${form.endDate}T23:59:59Z`).toISOString()
+        : ''
+    )
     fd.append('managerId', managerId)
 
     customerIds.forEach(id => fd.append('customerIds', id))
-
-    images.forEach(img => {
-      fd.append('images', img.file)
-      fd.append('imageCaptions', img.caption)
+    images.forEach(i => {
+      fd.append('images', i.file)
+      fd.append('imageCaptions', i.caption)
     })
-
     files.forEach(f => {
       fd.append('files', f.file)
       fd.append('fileCaptions', f.caption)
@@ -117,22 +113,13 @@ export default function CreateProjectPage() {
         method: 'POST',
         body: fd,
       })
-
       const data = await res.json()
-
       if (!res.ok) {
-        setErrorMsg(data.message || 'Failed to create project')
+        setErrorMsg(data.message || 'Failed')
         return
       }
-
       setSuccessMsg('✅ Project created successfully')
-
-      setForm({
-        name: '',
-        description: '',
-        startDate: '',
-        endDate: '',
-      })
+      setForm({ name: '', description: '', startDate: '', endDate: '' })
       setManagerId('')
       setManagerQuery('')
       setCustomerIds([])
@@ -140,7 +127,7 @@ export default function CreateProjectPage() {
       setImages([])
       setFiles([])
     } catch {
-      setErrorMsg('Unexpected error occurred')
+      setErrorMsg('Unexpected error')
     } finally {
       setLoading(false)
     }
@@ -150,9 +137,9 @@ export default function CreateProjectPage() {
     <div className="max-w-4xl mx-auto p-6 space-y-10">
       <h1 className="text-2xl font-semibold">Create New Project</h1>
 
-      {/* PROJECT INFO */}
+      {/* INFO */}
       <div className="space-y-4">
-        <div className="space-y-2">
+        <div>
           <label className="block text-sm font-medium">Project Name</label>
           <input
             className="w-full border rounded-xl p-3"
@@ -161,7 +148,7 @@ export default function CreateProjectPage() {
           />
         </div>
 
-        <div className="space-y-2">
+        <div>
           <label className="block text-sm font-medium">Description</label>
           <textarea
             className="w-full border rounded-xl p-3"
@@ -175,44 +162,33 @@ export default function CreateProjectPage() {
 
       {/* DATES */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <label className="block text-sm font-medium">Start Date</label>
-          <input
-            type="date"
-            className="w-full border rounded-xl p-3"
-            value={form.startDate}
-            onChange={e =>
-              setForm({ ...form, startDate: e.target.value })
-            }
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="block text-sm font-medium">End Date</label>
-          <input
-            type="date"
-            className="w-full border rounded-xl p-3"
-            value={form.endDate}
-            onChange={e =>
-              setForm({ ...form, endDate: e.target.value })
-            }
-          />
-        </div>
+        {(['startDate', 'endDate'] as const).map(k => (
+          <div key={k}>
+            <label className="block text-sm font-medium">
+              {k === 'startDate' ? 'Start Date' : 'End Date'}
+            </label>
+            <input
+              type="date"
+              className="w-full border rounded-xl p-3"
+              value={form[k]}
+              onChange={e => setForm({ ...form, [k]: e.target.value })}
+            />
+          </div>
+        ))}
       </div>
 
       {/* MANAGER */}
-      <div className="space-y-2 relative">
+      <div className="relative">
         <label className="block text-sm font-medium">Project Manager</label>
         <input
           className="w-full border rounded-xl p-3"
           value={managerQuery}
+          onFocus={() => setManagerOpen(true)}
           onChange={e => {
             setManagerQuery(e.target.value)
             setManagerOpen(true)
           }}
-          onFocus={() => setManagerOpen(true)}
         />
-
         {managerOpen && (
           <div className="absolute z-20 w-full bg-white border rounded-xl max-h-60 overflow-auto">
             {managers.map(m => (
@@ -232,41 +208,66 @@ export default function CreateProjectPage() {
         )}
       </div>
 
-      {/* CUSTOMERS */}
-      <div className="space-y-2 relative">
+      {/* CUSTOMERS (FIXED) */}
+      <div className="relative">
         <label className="block text-sm font-medium">Customers</label>
         <input
           className="w-full border rounded-xl p-3"
           value={customerQuery}
+          onFocus={() => setCustomerOpen(true)}
           onChange={e => {
             setCustomerQuery(e.target.value)
             setCustomerOpen(true)
           }}
-          onFocus={() => setCustomerOpen(true)}
         />
+        {customerOpen && (
+          <div className="absolute z-20 w-full bg-white border rounded-xl max-h-60 overflow-auto">
+            {customers
+              .filter(c => !customerIds.includes(c.id))
+              .filter(c =>
+                (c.name || c.email || '')
+                  .toLowerCase()
+                  .includes(customerQuery.toLowerCase())
+              )
+              .map(c => (
+                <div
+                  key={c.id}
+                  className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                  onClick={() => {
+                    setCustomerIds(prev => [...prev, c.id])
+                    setCustomerQuery('')
+                    setCustomerOpen(false)
+                  }}
+                >
+                  {c.name || c.email}
+                </div>
+              ))}
+          </div>
+        )}
       </div>
 
-      {/* IMAGES */}
-      <div className="space-y-3">
+      {/* IMAGES — CAMERA ENABLED */}
+      <div>
         <label className="block text-sm font-medium">Project Images</label>
         <input
           ref={imageInputRef}
           type="file"
           multiple
           accept="image/*"
-          className="block"
+          capture="environment"
           onChange={e => handleImagePick(e.target.files)}
         />
       </div>
 
       {/* FILES */}
-      <div className="space-y-3">
-        <label className="block text-sm font-medium">Project Documents</label>
+      <div>
+        <label className="block text-sm font-medium">
+          Project Documents
+        </label>
         <input
           ref={fileInputRef}
           type="file"
           multiple
-          className="block"
           onChange={e => handleFilePick(e.target.files)}
         />
       </div>
