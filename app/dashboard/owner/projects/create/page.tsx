@@ -16,9 +16,6 @@ type UploadItem = {
 }
 
 export default function CreateProjectPage() {
-  /** =========================
-   * STATE
-   ========================= */
   const [managers, setManagers] = useState<UserOption[]>([])
   const [customers, setCustomers] = useState<UserOption[]>([])
 
@@ -47,9 +44,6 @@ export default function CreateProjectPage() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
-  /** =========================
-   * FETCH INIT DATA
-   ========================= */
   useEffect(() => {
     fetch('/api/projects')
       .then(res => res.json())
@@ -59,9 +53,6 @@ export default function CreateProjectPage() {
       })
   }, [])
 
-  /** =========================
-   * FILE HANDLERS
-   ========================= */
   const handleImagePick = (filesList: FileList | null) => {
     if (!filesList) return
 
@@ -89,15 +80,11 @@ export default function CreateProjectPage() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  /** =========================
-   * SUBMIT (FIX DATE ONLY)
-   ========================= */
   const submit = async () => {
     setLoading(true)
     setSuccessMsg(null)
     setErrorMsg(null)
 
-    // ✅ FIX INVALID DATE
     const startISO = form.startDate
       ? new Date(`${form.startDate}T00:00:00.000Z`).toISOString()
       : ''
@@ -105,14 +92,6 @@ export default function CreateProjectPage() {
     const endISO = form.endDate
       ? new Date(`${form.endDate}T23:59:59.999Z`).toISOString()
       : ''
-
-    console.log('[SUBMIT DEBUG]', {
-      name: form.name,
-      startISO,
-      endISO,
-      managerId,
-      customerIds,
-    })
 
     const fd = new FormData()
     fd.append('name', form.name)
@@ -167,37 +146,37 @@ export default function CreateProjectPage() {
     }
   }
 
-  /** =========================
-   * RENDER (100% UI ASLI)
-   ========================= */
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-8">
+    <div className="max-w-4xl mx-auto p-6 space-y-10">
       <h1 className="text-2xl font-semibold">Create New Project</h1>
 
       {/* PROJECT INFO */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Project Name</label>
-        <input
-          className="w-full border rounded-xl p-3"
-          value={form.name}
-          onChange={e => setForm({ ...form, name: e.target.value })}
-        />
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <label className="block text-sm font-medium">Project Name</label>
+          <input
+            className="w-full border rounded-xl p-3"
+            value={form.name}
+            onChange={e => setForm({ ...form, name: e.target.value })}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-sm font-medium">Description</label>
+          <textarea
+            className="w-full border rounded-xl p-3"
+            value={form.description}
+            onChange={e =>
+              setForm({ ...form, description: e.target.value })
+            }
+          />
+        </div>
       </div>
 
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Description</label>
-        <textarea
-          className="w-full border rounded-xl p-3"
-          value={form.description}
-          onChange={e =>
-            setForm({ ...form, description: e.target.value })
-          }
-        />
-      </div>
-
+      {/* DATES */}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <label className="text-sm font-medium">Start Date</label>
+          <label className="block text-sm font-medium">Start Date</label>
           <input
             type="date"
             className="w-full border rounded-xl p-3"
@@ -209,7 +188,7 @@ export default function CreateProjectPage() {
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium">End Date</label>
+          <label className="block text-sm font-medium">End Date</label>
           <input
             type="date"
             className="w-full border rounded-xl p-3"
@@ -221,9 +200,9 @@ export default function CreateProjectPage() {
         </div>
       </div>
 
-      {/* MANAGER PICK */}
+      {/* MANAGER */}
       <div className="space-y-2 relative">
-        <label className="text-sm font-medium">Project Manager</label>
+        <label className="block text-sm font-medium">Project Manager</label>
         <input
           className="w-full border rounded-xl p-3"
           value={managerQuery}
@@ -236,32 +215,26 @@ export default function CreateProjectPage() {
 
         {managerOpen && (
           <div className="absolute z-20 w-full bg-white border rounded-xl max-h-60 overflow-auto">
-            {managers
-              .filter(m =>
-                (m.name || m.email || '')
-                  .toLowerCase()
-                  .includes(managerQuery.toLowerCase())
-              )
-              .map(m => (
-                <div
-                  key={m.id}
-                  className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                  onClick={() => {
-                    setManagerId(m.id)
-                    setManagerQuery(m.name || m.email || '')
-                    setManagerOpen(false)
-                  }}
-                >
-                  {m.name || m.email}
-                </div>
-              ))}
+            {managers.map(m => (
+              <div
+                key={m.id}
+                className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                onClick={() => {
+                  setManagerId(m.id)
+                  setManagerQuery(m.name || m.email || '')
+                  setManagerOpen(false)
+                }}
+              >
+                {m.name || m.email}
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      {/* CUSTOMER PICK */}
+      {/* CUSTOMERS */}
       <div className="space-y-2 relative">
-        <label className="text-sm font-medium">Customers</label>
+        <label className="block text-sm font-medium">Customers</label>
         <input
           className="w-full border rounded-xl p-3"
           value={customerQuery}
@@ -271,158 +244,43 @@ export default function CreateProjectPage() {
           }}
           onFocus={() => setCustomerOpen(true)}
         />
-
-        {customerOpen && (
-          <div className="absolute z-20 w-full bg-white border rounded-xl max-h-60 overflow-auto">
-            {customers
-              .filter(c => !customerIds.includes(c.id))
-              .filter(c =>
-                (c.name || c.email || '')
-                  .toLowerCase()
-                  .includes(customerQuery.toLowerCase())
-              )
-              .map(c => (
-                <div
-                  key={c.id}
-                  className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                  onClick={() => {
-                    setCustomerIds(prev => [...prev, c.id])
-                    setCustomerQuery('')
-                    setCustomerOpen(false)
-                  }}
-                >
-                  {c.name || c.email}
-                </div>
-              ))}
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-2 mt-2">
-          {customerIds.map(id => {
-            const c = customers.find(x => x.id === id)
-            if (!c) return null
-            return (
-              <div
-                key={id}
-                className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-full text-sm"
-              >
-                {c.name || c.email}
-                <button
-                  type="button"
-                  className="text-red-600"
-                  onClick={() =>
-                    setCustomerIds(prev => prev.filter(x => x !== id))
-                  }
-                >
-                  ✕
-                </button>
-              </div>
-            )
-          })}
-        </div>
       </div>
 
-      {/* UPLOAD IMAGES */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Project Images</label>
+      {/* IMAGES */}
+      <div className="space-y-3">
+        <label className="block text-sm font-medium">Project Images</label>
         <input
           ref={imageInputRef}
           type="file"
           multiple
           accept="image/*"
+          className="block"
           onChange={e => handleImagePick(e.target.files)}
         />
-
-        <div className="grid grid-cols-3 gap-3">
-          {images.map(img => (
-            <div key={img.id} className="border rounded-xl p-2 space-y-2">
-              <img
-                src={img.preview}
-                className="w-full h-32 object-cover rounded"
-              />
-              <input
-                className="w-full border rounded p-1 text-sm"
-                placeholder="Caption"
-                value={img.caption}
-                onChange={e =>
-                  setImages(prev =>
-                    prev.map(i =>
-                      i.id === img.id
-                        ? { ...i, caption: e.target.value }
-                        : i
-                    )
-                  )
-                }
-              />
-              <button
-                className="text-red-600 text-xs"
-                onClick={() =>
-                  setImages(prev => prev.filter(i => i.id !== img.id))
-                }
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-        </div>
       </div>
 
-      {/* UPLOAD FILES */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Project Documents</label>
+      {/* FILES */}
+      <div className="space-y-3">
+        <label className="block text-sm font-medium">Project Documents</label>
         <input
           ref={fileInputRef}
           type="file"
           multiple
+          className="block"
           onChange={e => handleFilePick(e.target.files)}
         />
-
-        <div className="space-y-2">
-          {files.map(f => (
-            <div key={f.id} className="border rounded-xl p-2 space-y-1">
-              <div className="text-sm break-words">{f.file.name}</div>
-              <input
-                className="w-full border rounded p-1 text-sm"
-                placeholder="Caption"
-                value={f.caption}
-                onChange={e =>
-                  setFiles(prev =>
-                    prev.map(x =>
-                      x.id === f.id
-                        ? { ...x, caption: e.target.value }
-                        : x
-                    )
-                  )
-                }
-              />
-              <button
-                className="text-red-600 text-xs"
-                onClick={() =>
-                  setFiles(prev => prev.filter(x => x.id !== f.id))
-                }
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-        </div>
       </div>
 
-      {/* SUBMIT */}
       <button
         onClick={submit}
         disabled={loading}
-        className="w-full bg-black text-white rounded-xl py-3 disabled:opacity-50"
+        className="w-full bg-black text-white rounded-xl py-3"
       >
         {loading ? 'Creating...' : 'Create Project'}
       </button>
 
-      {successMsg && (
-        <p className="text-green-600 text-sm">{successMsg}</p>
-      )}
-      {errorMsg && (
-        <p className="text-red-600 text-sm">{errorMsg}</p>
-      )}
+      {successMsg && <p className="text-green-600">{successMsg}</p>}
+      {errorMsg && <p className="text-red-600">{errorMsg}</p>}
     </div>
   )
 }
