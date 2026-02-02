@@ -44,6 +44,9 @@ export default function CreateProjectPage() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
+  /* =========================
+   * FETCH DATA
+   ========================= */
   useEffect(() => {
     fetch('/api/projects')
       .then(res => res.json())
@@ -53,6 +56,9 @@ export default function CreateProjectPage() {
       })
   }, [])
 
+  /* =========================
+   * FILE HANDLERS
+   ========================= */
   const handleImagePick = (list: FileList | null) => {
     if (!list) return
     const items = Array.from(list).map(file => ({
@@ -76,6 +82,9 @@ export default function CreateProjectPage() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  /* =========================
+   * SUBMIT
+   ========================= */
   const submit = async () => {
     setLoading(true)
     setErrorMsg(null)
@@ -115,9 +124,10 @@ export default function CreateProjectPage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        setErrorMsg(data.message || 'Failed')
+        setErrorMsg(data.message || 'Failed to create project')
         return
       }
+
       setSuccessMsg('✅ Project created successfully')
       setForm({ name: '', description: '', startDate: '', endDate: '' })
       setManagerId('')
@@ -127,7 +137,7 @@ export default function CreateProjectPage() {
       setImages([])
       setFiles([])
     } catch {
-      setErrorMsg('Unexpected error')
+      setErrorMsg('Unexpected error occurred')
     } finally {
       setLoading(false)
     }
@@ -190,12 +200,12 @@ export default function CreateProjectPage() {
           }}
         />
         {managerOpen && (
-          <div className="absolute z-20 w-full bg-white border rounded-xl max-h-60 overflow-auto">
+          <div className="absolute z-30 w-full bg-white border rounded-xl max-h-60 overflow-auto">
             {managers.map(m => (
               <div
                 key={m.id}
                 className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                onClick={() => {
+                onPointerDown={() => {
                   setManagerId(m.id)
                   setManagerQuery(m.name || m.email || '')
                   setManagerOpen(false)
@@ -208,8 +218,8 @@ export default function CreateProjectPage() {
         )}
       </div>
 
-      {/* CUSTOMERS (FIXED) */}
-      <div className="relative">
+      {/* CUSTOMERS */}
+      <div className="relative space-y-2">
         <label className="block text-sm font-medium">Customers</label>
         <input
           className="w-full border rounded-xl p-3"
@@ -220,8 +230,9 @@ export default function CreateProjectPage() {
             setCustomerOpen(true)
           }}
         />
+
         {customerOpen && (
-          <div className="absolute z-20 w-full bg-white border rounded-xl max-h-60 overflow-auto">
+          <div className="absolute z-30 w-full bg-white border rounded-xl max-h-60 overflow-auto">
             {customers
               .filter(c => !customerIds.includes(c.id))
               .filter(c =>
@@ -233,7 +244,7 @@ export default function CreateProjectPage() {
                 <div
                   key={c.id}
                   className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                  onClick={() => {
+                  onPointerDown={() => {
                     setCustomerIds(prev => [...prev, c.id])
                     setCustomerQuery('')
                     setCustomerOpen(false)
@@ -244,22 +255,49 @@ export default function CreateProjectPage() {
               ))}
           </div>
         )}
+
+        {/* PICKED CUSTOMERS */}
+        <div className="flex flex-wrap gap-2">
+          {customerIds.map(id => {
+            const c = customers.find(x => x.id === id)
+            if (!c) return null
+            return (
+              <div
+                key={id}
+                className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-full text-sm"
+              >
+                {c.name || c.email}
+                <button
+                  type="button"
+                  className="text-red-600"
+                  onClick={() =>
+                    setCustomerIds(prev =>
+                      prev.filter(x => x !== id)
+                    )
+                  }
+                >
+                  ✕
+                </button>
+              </div>
+            )
+          })}
+        </div>
       </div>
 
-      {/* IMAGES — CAMERA ENABLED */}
+      {/* IMAGE PICKER (CAMERA) */}
       <div>
         <label className="block text-sm font-medium">Project Images</label>
         <input
           ref={imageInputRef}
           type="file"
-          multiple
           accept="image/*"
           capture="environment"
+          multiple
           onChange={e => handleImagePick(e.target.files)}
         />
       </div>
 
-      {/* FILES */}
+      {/* FILE PICKER */}
       <div>
         <label className="block text-sm font-medium">
           Project Documents
