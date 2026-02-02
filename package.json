@@ -12,6 +12,7 @@
     "@auth/prisma-adapter": "^2.11.1",
     "@prisma/client": "^6.19.2",
     "bcrypt": "^6.0.0",
+    "browser-image-compression": "^2.0.2",
     "next": "^15.1.0",
     "next-auth": "5.0.0-beta.30",
     "pg": "^8.17.1",
