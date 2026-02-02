@@ -1,0 +1,268 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  PROJECT_OWNER
+  PROJECT_MANAGER
+  CUSTOMER
+}
+
+enum ReportStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum ProjectFileType {
+  IMAGE
+  DOCUMENT
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String?
+  email         String?   @unique
+  image         String?
+  emailVerified DateTime?
+  role          Role      @default(PROJECT_OWNER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  ownedProjects    Project[]         @relation("OwnerProjects")
+  managedProjects  Project[]         @relation("ManagerProjects")
+  customerProjects ProjectCustomer[]
+  dailyReports     DailyReport[]
+  weeklyReports    WeeklyReport[]
+  monthlyReports   MonthlyReport[]
+  reportComments   ReportComment[]
+
+  projectRatings ProjectRating[] // ⬅️ NEW
+  auditLogs      AuditLog[]
+
+  accounts Account[]
+  sessions Session[]
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ownerId   String
+  managerId String
+
+  owner   User @relation("OwnerProjects", fields: [ownerId], references: [id])
+  manager User @relation("ManagerProjects", fields: [managerId], references: [id])
+
+  customers ProjectCustomer[]
+
+  dailyReports   DailyReport[]
+  weeklyReports  WeeklyReport[]
+  monthlyReports MonthlyReport[]
+
+  files ProjectFile[]
+
+  isDone Boolean @default(false)
+
+  ratings ProjectRating[] // ⬅️ NEW
+}
+
+model ProjectCustomer {
+  id         String   @id @default(uuid())
+  projectId  String
+  customerId String
+  createdAt  DateTime @default(now())
+
+  project  Project @relation(fields: [projectId], references: [id])
+  customer User    @relation(fields: [customerId], references: [id])
+
+  @@unique([projectId, customerId])
+}
+
+model ProjectRating {
+  id         String @id @default(uuid())
+  projectId  String
+  customerId String
+
+  rating   Int // 1–5
+  feedback String?
+
+  createdAt DateTime @default(now())
+
+  project  Project @relation(fields: [projectId], references: [id])
+  customer User    @relation(fields: [customerId], references: [id])
+
+  @@unique([projectId, customerId])
+}
+
+model DailyReport {
+  id          String       @id @default(uuid())
+  projectId   String
+  createdById String
+  status      ReportStatus @default(DRAFT)
+  reportDate  DateTime
+  content     String
+  rejectNote  String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  project   Project @relation(fields: [projectId], references: [id])
+  createdBy User    @relation(fields: [createdById], references: [id])
+
+  photos   ReportPhoto[]
+  comments ReportComment[]
+}
+
+model WeeklyReport {
+  id          String       @id @default(uuid())
+  projectId   String
+  createdById String
+  status      ReportStatus @default(DRAFT)
+  weekStart   DateTime
+  weekEnd     DateTime
+  content     String
+  rejectNote  String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  project   Project @relation(fields: [projectId], references: [id])
+  createdBy User    @relation(fields: [createdById], references: [id])
+
+  photos   ReportPhoto[]
+  comments ReportComment[]
+}
+
+model MonthlyReport {
+  id          String       @id @default(uuid())
+  projectId   String
+  createdById String
+  status      ReportStatus @default(DRAFT)
+  month       Int
+  year        Int
+  content     String
+  rejectNote  String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  project   Project @relation(fields: [projectId], references: [id])
+  createdBy User    @relation(fields: [createdById], references: [id])
+
+  photos   ReportPhoto[]
+  comments ReportComment[]
+}
+
+model ReportPhoto {
+  id        String   @id @default(uuid())
+  url       String
+  caption   String?
+  createdAt DateTime @default(now())
+
+  dailyReportId   String?
+  weeklyReportId  String?
+  monthlyReportId String?
+
+  dailyReport   DailyReport?   @relation(fields: [dailyReportId], references: [id])
+  weeklyReport  WeeklyReport?  @relation(fields: [weeklyReportId], references: [id])
+  monthlyReport MonthlyReport? @relation(fields: [monthlyReportId], references: [id])
+}
+
+model ReportComment {
+  id        String   @id @default(uuid())
+  message   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  dailyReportId   String?
+  weeklyReportId  String?
+  monthlyReportId String?
+
+  user User @relation(fields: [userId], references: [id])
+
+  dailyReport   DailyReport?   @relation(fields: [dailyReportId], references: [id])
+  weeklyReport  WeeklyReport?  @relation(fields: [weeklyReportId], references: [id])
+  monthlyReport MonthlyReport? @relation(fields: [monthlyReportId], references: [id])
+}
+
+model ProjectFile {
+  id        String @id @default(uuid())
+  projectId String
+
+  url      String
+  type     ProjectFileType
+  fileName String?
+  caption  String?
+
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  actorId   String
+  actorRole Role
+  action    String
+  entity    String
+  entityId  String
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  actor User @relation(fields: [actorId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([actorId])
+}
+
+/**
+ * =========================
+ * AUTH.JS / NEXTAUTH MODELS
+ * =========================
+ */
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
