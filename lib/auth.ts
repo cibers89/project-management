@@ -1,111 +1,158 @@
-import NextAuth from "next-auth";
-import GitHub from "next-auth/providers/github";
-import Credentials from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@auth/prisma-adapter";
-import { prisma } from "@/lib/prisma";
-import type { NextAuthConfig } from "next-auth";
+import NextAuth from 'next-auth'
+import GitHub from 'next-auth/providers/github'
+import Credentials from 'next-auth/providers/credentials'
+import { PrismaAdapter } from '@auth/prisma-adapter'
+import { prisma } from '@/lib/prisma'
 
-// 1️⃣ Simpan config saja (AMAN di build)
-const authConfig: NextAuthConfig = {
+export const {
+  handlers,
+  auth,
+  signIn,
+  signOut,
+} = NextAuth({
   adapter: PrismaAdapter(prisma),
-  session: {
-    strategy: "jwt",
+
+  /**
+   * ======================================================
+   * CUSTOM AUTH PAGES
+   * ======================================================
+   * ⛔ disable default /api/auth/signin
+   * ✅ redirect to /login instead
+   */
+  pages: {
+    signIn: '/login',
+    signOut: '/logout',
+    error: '/login',
   },
+
+  /**
+   * ======================================================
+   * SESSION
+   * ======================================================
+   */
+  session: {
+    strategy: 'jwt',
+  },
+
+  /**
+   * ======================================================
+   * PROVIDERS
+   * ======================================================
+   */
   providers: [
+    /**
+     * ===== GitHub OAuth =====
+     */
     GitHub({
       clientId: process.env.GITHUB_ID!,
       clientSecret: process.env.GITHUB_SECRET!,
     }),
+
+    /**
+     * ===== Demo Login (Email Only) =====
+     */
     Credentials({
-      name: "Demo Login",
+      name: 'Demo Login',
       credentials: {
-        email: { label: "Email", type: "email" },
+        email: { label: 'Email', type: 'email' },
       },
       async authorize(credentials) {
-        if (!credentials?.email) return null;
+        if (!credentials?.email) return null
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email },
-        });
+        })
 
-        if (!user) return null;
+        if (!user) return null
 
         return {
           id: user.id,
           name: user.name,
           email: user.email,
           role: user.role,
-        };
+        }
       },
     }),
   ],
+
+  /**
+   * ======================================================
+   * CALLBACKS
+   * ======================================================
+   */
   callbacks: {
+    /**
+     * JWT
+     * - simpan id & role
+     */
     async jwt({ token, user }) {
       if (user) {
-        token.id = (user as any).id;
-        token.role = (user as any).role;
+        token.id = (user as any).id
+        token.role = (user as any).role
       }
 
       if (token.email && !token.role) {
         const dbUser = await prisma.user.findUnique({
           where: { email: token.email as string },
-        });
+        })
 
         if (dbUser) {
-          token.id = dbUser.id;
-          token.role = dbUser.role;
+          token.id = dbUser.id
+          token.role = dbUser.role
         }
       }
 
-      return token;
+      return token
     },
 
+    /**
+     * SESSION
+     * - expose id & role
+     */
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id as string;
-        session.user.role = token.role as string;
+        session.user.id = token.id as string
+        session.user.role = token.role as string
       }
-      return session;
+      return session
     },
 
+    /**
+     * SIGN IN
+     * - allow / deny only
+     */
     async signIn({ user }) {
-      return !!user;
+      return !!user
     },
   },
 
+  /**
+   * ======================================================
+   * EVENTS — AUDIT TRAIL (LOGIN)
+   * ======================================================
+   */
   events: {
     async signIn({ user, account }) {
-      if (!user?.id) return;
+      if (!user?.id) return
 
       try {
         await prisma.auditLog.create({
           data: {
             actorId: user.id as string,
             actorRole: (user as any).role,
-            action: "LOGIN_SUCCESS",
-            entity: "AUTH",
+            action: 'LOGIN_SUCCESS',
+            entity: 'AUTH',
             entityId: user.id as string,
             meta: {
               provider: account?.provider,
               email: user.email,
             },
           },
-        });
+        })
       } catch (err) {
-        console.error("[AUDIT LOGIN ERROR]", err);
+        // ❗ audit tidak boleh bikin login gagal
+        console.error('[AUDIT LOGIN ERROR]', err)
       }
     },
   },
-};
-
-// 2️⃣ Factory — dieksekusi HANYA saat runtime
-function getAuth() {
-  return NextAuth(authConfig);
-}
-
-// 3️⃣ Export API YANG SAMA (route TIDAK BERUBAH)
-export async function auth(...args: Parameters<ReturnType<typeof getAuth>["auth"]>) {
-  return getAuth().auth(...args);
-}
-
-export const { handlers, signIn, signOut } = getAuth();
+})
