@@ -17,9 +17,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  /* =======================
-   * LOAD DEMO USERS
-   ======================= */
   useEffect(() => {
     fetch('/api/demo-users')
       .then(res => res.json())
@@ -27,9 +24,6 @@ export default function LoginPage() {
       .catch(() => setError('Failed to load demo users'))
   }, [])
 
-  /* =======================
-   * LOGIN HANDLER
-   ======================= */
   const loginDemo = async () => {
     if (!selectedEmail) {
       setError('Please select a demo user')
@@ -80,9 +74,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-gray-100 to-slate-200 px-4">
       <div className="w-full max-w-md">
-        {/* CARD */}
         <div className="relative bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-gray-200 p-8 space-y-6">
-          {/* HEADER */}
           <div className="text-center space-y-1">
             <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">
               Project Management System
@@ -92,7 +84,6 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* DEMO USER SELECT */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-gray-700">
               Demo Account
@@ -111,7 +102,6 @@ export default function LoginPage() {
             </select>
           </div>
 
-          {/* LOGIN BUTTON */}
           <button
             onClick={loginDemo}
             disabled={loading}
@@ -120,16 +110,12 @@ export default function LoginPage() {
             {loading ? 'Signing in…' : 'Continue as Demo User'}
           </button>
 
-          {/* DIVIDER */}
           <div className="flex items-center gap-4">
             <div className="h-px flex-1 bg-gray-200" />
-            <span className="text-xs text-gray-400 uppercase">
-              or
-            </span>
+            <span className="text-xs text-gray-400 uppercase">or</span>
             <div className="h-px flex-1 bg-gray-200" />
           </div>
 
-          {/* GITHUB LOGIN */}
           <button
             onClick={() => signIn('github')}
             className="w-full rounded-xl border border-gray-300 bg-white py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
@@ -137,6 +123,17 @@ export default function LoginPage() {
             Login with GitHub
           </button>
 
-          {/* ERROR */}
-          {error && (
+          {error ? (
             <p className="text-sm text-red-600 text-center">
+              {error}
+            </p>
+          ) : null}
+        </div>
+
+        <p className="mt-6 text-center text-xs text-gray-400">
+          © {new Date().getFullYear()} Internal Demo Environment
+        </p>
+      </div>
+    </div>
+  )
+}
