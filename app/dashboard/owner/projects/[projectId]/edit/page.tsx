@@ -493,6 +493,7 @@ export default function EditProjectPage() {
           ref={imageInputRef}
           type="file"
           multiple
+		  capture="environment" //tambahan untuk buka kamera
           accept="image/*"
           onChange={e => pickImages(e.target.files)}
         />
