@@ -296,6 +296,7 @@ export default function EditDailyReportPage() {
         ref={fileInputRef}
         type="file"
         accept="image/*"
+		capture="environment" //tambahan untuk buka kamera
         multiple
         onChange={e => addPhotos(e.target.files)}
       />
