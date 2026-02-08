@@ -395,6 +395,7 @@ export default function CreateProjectPage() {
         <input
           ref={imageInputRef}
           type="file"
+		  capture="environment" //tambahan untuk buka kamera
           multiple
           accept="image/*"
           onChange={e => handleImagePick(e.target.files)}

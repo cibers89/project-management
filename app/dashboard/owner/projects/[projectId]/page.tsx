@@ -268,7 +268,6 @@ export default function OwnerProjectDetailPage() {
               </Link>
             )}
 
-            {/* ===== MARK AS DONE BUTTON ===== */}
             {!project.isDone && allReportsApproved && (
               <button
                 onClick={markAsDone}
@@ -306,7 +305,6 @@ export default function OwnerProjectDetailPage() {
               {projectStatusLabel}
             </span>
 
-            {/* ===== RATING SUMMARY ===== */}
             {project.isDone && project.ratingSummary && (
               <div className="mt-2">
                 <button
@@ -443,6 +441,14 @@ export default function OwnerProjectDetailPage() {
         {project.dailyReports.map(report => {
           const open = openReportId === report.id
           const photos = report.photos ?? []
+          const comments = report.comments ?? []
+
+          // ADD-ON: newest feedback on top
+          const sortedComments = [...comments].sort(
+            (a, b) =>
+              new Date(b.createdAt).getTime() -
+              new Date(a.createdAt).getTime()
+          )
 
           return (
             <div key={report.id} className="border-t">
@@ -492,6 +498,39 @@ export default function OwnerProjectDetailPage() {
                               {photo.caption}
                             </div>
                           )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ===== CUSTOMER FEEDBACK (ADD-ON ONLY) ===== */}
+                  {sortedComments.length > 0 && (
+                    <div className="border-t pt-4 space-y-3">
+                      <h3 className="text-sm font-semibold text-gray-700">
+                        Customer Feedback
+                      </h3>
+
+                      {sortedComments.map(c => (
+                        <div
+                          key={c.id}
+                          className="border rounded-xl p-3 text-sm bg-gray-50"
+                        >
+                          <div className="flex justify-between mb-1 text-xs text-gray-500">
+                            <span className="font-medium text-gray-700">
+                              Customer •{' '}
+                              {c.user.name ||
+                                c.user.email ||
+                                'Unknown'}
+                            </span>
+                            <span>
+                              {new Date(
+                                c.createdAt
+                              ).toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="text-gray-700 whitespace-pre-line break-words">
+                            {c.message}
+                          </p>
                         </div>
                       ))}
                     </div>
@@ -567,3 +606,5 @@ export default function OwnerProjectDetailPage() {
     </div>
   )
 }
+
+

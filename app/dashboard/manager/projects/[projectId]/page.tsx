@@ -13,6 +13,16 @@ type Photo = {
   caption: string | null
 }
 
+type Comment = {
+  id: string
+  message: string
+  createdAt: string
+  user: {
+    name: string | null
+    email: string | null
+  }
+}
+
 type Report = {
   id: string
   content: string
@@ -20,6 +30,7 @@ type Report = {
   status: 'SUBMITTED' | 'APPROVED' | 'REJECTED'
   rejectNote?: string | null
   photos: Photo[]
+  comments?: Comment[]
 }
 
 type ProjectFile = {
@@ -153,7 +164,9 @@ export default function ManagerProjectDetailPage() {
             <b>Customers:</b> {customerNames || '-'}
           </div>
           <div>
-            <span className={`inline-block text-xs px-2 py-1 rounded ${projectStatusClass}`}>
+            <span
+              className={`inline-block text-xs px-2 py-1 rounded ${projectStatusClass}`}
+            >
               {projectStatusLabel}
             </span>
           </div>
@@ -241,6 +254,13 @@ export default function ManagerProjectDetailPage() {
         {project.dailyReports.map(report => {
           const open = openReportId === report.id
           const photos = report.photos ?? []
+          const comments = report.comments ?? []
+
+          const sortedComments = [...comments].sort(
+            (a, b) =>
+              new Date(b.createdAt).getTime() -
+              new Date(a.createdAt).getTime()
+          )
 
           return (
             <div key={report.id} className="border-t">
@@ -271,7 +291,9 @@ export default function ManagerProjectDetailPage() {
                         <div
                           key={photo.id}
                           className="border rounded-xl overflow-hidden cursor-pointer"
-                          onClick={() => setPreviewUrl(photo.url)}
+                          onClick={() =>
+                            setPreviewUrl(photo.url)
+                          }
                         >
                           <img
                             src={photo.url}
@@ -282,6 +304,39 @@ export default function ManagerProjectDetailPage() {
                               {photo.caption}
                             </div>
                           )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ===== CUSTOMER FEEDBACK (RESTORED & MATCH OWNER) ===== */}
+                  {sortedComments.length > 0 && (
+                    <div className="border-t pt-4 space-y-3">
+                      <h3 className="text-sm font-semibold text-gray-700">
+                        Customer Feedback
+                      </h3>
+
+                      {sortedComments.map(c => (
+                        <div
+                          key={c.id}
+                          className="border rounded-xl p-3 text-sm bg-gray-50"
+                        >
+                          <div className="flex justify-between mb-1 text-xs text-gray-500">
+                            <span className="font-medium text-gray-700">
+                              Customer •{' '}
+                              {c.user.name ||
+                                c.user.email ||
+                                'Unknown'}
+                            </span>
+                            <span>
+                              {new Date(
+                                c.createdAt
+                              ).toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="text-gray-700 whitespace-pre-line break-words">
+                            {c.message}
+                          </p>
                         </div>
                       ))}
                     </div>

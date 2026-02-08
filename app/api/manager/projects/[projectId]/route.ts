@@ -82,6 +82,24 @@ export async function GET(
               caption: true,
             },
           },
+
+          /* ===== CUSTOMER FEEDBACK (RESTORED) ===== */
+          comments: {
+            orderBy: {
+              createdAt: 'desc',
+            },
+            select: {
+              id: true,
+              message: true,
+              createdAt: true,
+              user: {
+                select: {
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
         },
       },
     },
