@@ -1,9 +1,16 @@
+export const runtime = 'nodejs'
+
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import fs from 'fs/promises'
-import path from 'path'
+import { put } from '@vercel/blob'
 
+/**
+ * ======================================================
+ * POST — CREATE DAILY REPORT (MANAGER)
+ * (VERCEL BLOB — PHOTOS)
+ * ======================================================
+ */
 export async function POST(req: Request) {
   const session = await auth()
 
@@ -22,6 +29,7 @@ export async function POST(req: Request) {
   const photos = formData.getAll('photos') as File[]
   const captions = formData.getAll('captions') as string[]
 
+  // 🔐 VALIDATION
   if (!projectId || !content) {
     return NextResponse.json(
       { message: 'Invalid data' },
@@ -29,6 +37,11 @@ export async function POST(req: Request) {
     )
   }
 
+  /**
+   * =========================
+   * CREATE DAILY REPORT
+   * =========================
+   */
   const report = await prisma.dailyReport.create({
     data: {
       projectId,
@@ -39,33 +52,28 @@ export async function POST(req: Request) {
     },
   })
 
-  if (photos.length > 0) {
-    const uploadDir = path.join(
-      process.cwd(),
-      'public/uploads'
+  /**
+   * =========================
+   * UPLOAD PHOTOS — VERCEL BLOB
+   * =========================
+   */
+  for (let i = 0; i < photos.length; i++) {
+    const photo = photos[i]
+    if (!photo || typeof photo === 'string') continue
+
+    const blob = await put(
+      `projects/${projectId}/reports/${report.id}/photos/${Date.now()}-${photo.name}`,
+      photo,
+      { access: 'public' }
     )
 
-    await fs.mkdir(uploadDir, { recursive: true })
-
-    for (let i = 0; i < photos.length; i++) {
-      const file = photos[i]
-      const buffer = Buffer.from(
-        await file.arrayBuffer()
-      )
-
-      const filename = `${Date.now()}-${file.name}`
-      const filePath = path.join(uploadDir, filename)
-
-      await fs.writeFile(filePath, buffer)
-
-      await prisma.reportPhoto.create({
-        data: {
-          url: `/uploads/${filename}`,
-          caption: captions[i] || '',
-          dailyReportId: report.id,
-        },
-      })
-    }
+    await prisma.reportPhoto.create({
+      data: {
+        dailyReportId: report.id,
+        url: blob.url,
+        caption: captions[i] || '',
+      },
+    })
   }
 
   return NextResponse.json({ success: true })

@@ -1,12 +1,15 @@
+export const runtime = 'nodejs'
+
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import fs from 'fs/promises'
-import path from 'path'
+import { logAudit } from '@/lib/audit'
+import { put, del } from '@vercel/blob'
 
 /**
  * ======================================================
  * GET — VIEW PROJECT DETAIL (OWNER)
+ * (ASLI — TIDAK DIUBAH)
  * ======================================================
  */
 export async function GET(
@@ -30,7 +33,6 @@ export async function GET(
       manager: {
         select: { id: true, name: true, email: true },
       },
-
       customers: {
         select: {
           customerId: true,
@@ -39,7 +41,6 @@ export async function GET(
           },
         },
       },
-
       files: {
         orderBy: { createdAt: 'asc' },
         select: {
@@ -50,7 +51,6 @@ export async function GET(
           fileName: true,
         },
       },
-
       dailyReports: {
         orderBy: { createdAt: 'desc' },
         include: {
@@ -70,7 +70,6 @@ export async function GET(
           },
         },
       },
-
       ratings: {
         include: {
           customer: {
@@ -85,18 +84,10 @@ export async function GET(
     return NextResponse.json({ message: 'Not found' }, { status: 404 })
   }
 
-  /**
-   * =============================
-   * RATING SUMMARY (DONE ONLY)
-   * =============================
-   */
   let ratingSummary = null
 
   if (project.isDone && project.ratings.length > 0) {
-    const total = project.ratings.reduce(
-      (sum, r) => sum + r.rating,
-      0
-    )
+    const total = project.ratings.reduce((sum, r) => sum + r.rating, 0)
 
     ratingSummary = {
       average: total / project.ratings.length,
@@ -116,7 +107,7 @@ export async function GET(
     project: {
       ...project,
       ratingSummary,
-      ratings: undefined, // jangan expose raw ratings
+      ratings: undefined,
     },
   })
 }
@@ -124,6 +115,7 @@ export async function GET(
 /**
  * ======================================================
  * PUT — EDIT PROJECT (OWNER)
+ * (FINAL — FIX DELETE + UPLOAD STUCK)
  * ======================================================
  */
 export async function PUT(
@@ -144,7 +136,6 @@ export async function PUT(
   const startDate = formData.get('startDate') as string
   const endDate = formData.get('endDate') as string
   const managerId = formData.get('managerId') as string
-
   const customerIds = formData.getAll('customerIds') as string[]
 
   const images = formData.getAll('images') as File[]
@@ -153,8 +144,8 @@ export async function PUT(
   const files = formData.getAll('files') as File[]
   const fileCaptions = formData.getAll('fileCaptions') as string[]
 
-  const existingImages = formData.getAll('existingImages') as string[]
-  const existingFiles = formData.getAll('existingFiles') as string[]
+  const keepImageUrls = formData.getAll('existingImages') as string[]
+  const keepFileUrls = formData.getAll('existingFiles') as string[]
 
   if (!name || !startDate || !endDate || !managerId) {
     return NextResponse.json(
@@ -164,10 +155,7 @@ export async function PUT(
   }
 
   const project = await prisma.project.findFirst({
-    where: {
-      id: projectId,
-      ownerId: session.user.id,
-    },
+    where: { id: projectId, ownerId: session.user.id },
   })
 
   if (!project) {
@@ -177,6 +165,11 @@ export async function PUT(
     )
   }
 
+  /**
+   * =========================
+   * UPDATE CORE PROJECT
+   * =========================
+   */
   await prisma.project.update({
     where: { id: projectId },
     data: {
@@ -192,26 +185,56 @@ export async function PUT(
     },
   })
 
-  await prisma.projectFile.deleteMany({
-    where: {
-      projectId,
-      url: {
-        notIn: [...existingImages, ...existingFiles],
-      },
-    },
+  /**
+   * =========================
+   * LOAD EXISTING FILES
+   * =========================
+   */
+  const existingFiles = await prisma.projectFile.findMany({
+    where: { projectId },
   })
 
-  const uploadDir = path.join(process.cwd(), 'public/uploads')
-  await fs.mkdir(uploadDir, { recursive: true })
+  /**
+   * =========================
+   * DELETE REMOVED FILES (NON-BLOCKING)
+   * =========================
+   */
+  const deleteTasks: Promise<any>[] = []
 
+  for (const f of existingFiles) {
+    if (f.type === 'IMAGE' && !keepImageUrls.includes(f.url)) {
+      deleteTasks.push(
+        del(f.url).catch(() => null).then(() =>
+          prisma.projectFile.delete({ where: { id: f.id } })
+        )
+      )
+    }
+
+    if (f.type === 'DOCUMENT' && !keepFileUrls.includes(f.url)) {
+      deleteTasks.push(
+        del(f.url).catch(() => null).then(() =>
+          prisma.projectFile.delete({ where: { id: f.id } })
+        )
+      )
+    }
+  }
+
+  await Promise.all(deleteTasks)
+
+  /**
+   * =========================
+   * UPLOAD NEW IMAGES — BLOB
+   * =========================
+   */
   for (let i = 0; i < images.length; i++) {
     const img = images[i]
     if (!img || typeof img === 'string') continue
 
-    const buffer = Buffer.from(await img.arrayBuffer())
-    const fileName = `${Date.now()}-${img.name}`
-
-    await fs.writeFile(path.join(uploadDir, fileName), buffer)
+    const blob = await put(
+      `projects/${projectId}/images/${Date.now()}-${img.name}`,
+      img,
+      { access: 'public' }
+    )
 
     await prisma.projectFile.create({
       data: {
@@ -219,19 +242,25 @@ export async function PUT(
         type: 'IMAGE',
         fileName: img.name,
         caption: imageCaptions[i] || '',
-        url: `/uploads/${fileName}`,
+        url: blob.url,
       },
     })
   }
 
+  /**
+   * =========================
+   * UPLOAD NEW FILES — BLOB
+   * =========================
+   */
   for (let i = 0; i < files.length; i++) {
     const file = files[i]
     if (!file || typeof file === 'string') continue
 
-    const buffer = Buffer.from(await file.arrayBuffer())
-    const fileName = `${Date.now()}-${file.name}`
-
-    await fs.writeFile(path.join(uploadDir, fileName), buffer)
+    const blob = await put(
+      `projects/${projectId}/documents/${Date.now()}-${file.name}`,
+      file,
+      { access: 'public' }
+    )
 
     await prisma.projectFile.create({
       data: {
@@ -239,10 +268,22 @@ export async function PUT(
         type: 'DOCUMENT',
         fileName: file.name,
         caption: fileCaptions[i] || '',
-        url: `/uploads/${fileName}`,
+        url: blob.url,
       },
     })
   }
+
+  /**
+   * =========================
+   * AUDIT
+   * =========================
+   */
+  logAudit({
+    session,
+    action: 'UPDATE_PROJECT',
+    entity: 'PROJECT',
+    entityId: projectId,
+  }).catch(() => {})
 
   return NextResponse.json({ success: true })
 }
@@ -250,6 +291,7 @@ export async function PUT(
 /**
  * ======================================================
  * PATCH — MARK PROJECT AS DONE (OWNER)
+ * (ASLI — TIDAK DIUBAH)
  * ======================================================
  */
 export async function PATCH(

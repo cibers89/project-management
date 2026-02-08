@@ -15,7 +15,7 @@ export default function ApprovalDetailPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`/api/owner/approvals/${reportType}/${reportId}`)
+    fetch(`/api/owner/approval-detail/${reportType}/${reportId}`)
       .then(res => res.json())
       .then(data => setReport(data.report))
       .finally(() => setLoading(false))
@@ -23,7 +23,7 @@ export default function ApprovalDetailPage() {
 
   const submit = async (action: 'approve' | 'reject') => {
     const res = await fetch(
-      `/api/owner/approvals/${reportType}/${reportId}`,
+      `/api/owner/approval-detail/${reportType}/${reportId}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

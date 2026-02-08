@@ -6,35 +6,90 @@ export async function GET(
   req: Request,
   context: { params: Promise<{ projectId: string }> }
 ) {
+  /* =======================
+   * AUTH
+   ======================= */
   const session = await auth()
 
   if (!session || session.user.role !== 'PROJECT_MANAGER') {
-    return NextResponse.json({ message: 'Forbidden' }, { status: 403 })
+    return NextResponse.json(
+      { message: 'Forbidden' },
+      { status: 403 }
+    )
   }
 
-  // ✅ WAJIB await params (Next.js 15+ / 16)
+  /* =======================
+   * PARAMS (Next.js 15+)
+   ======================= */
   const { projectId } = await context.params
 
+  /* =======================
+   * QUERY
+   ======================= */
   const project = await prisma.project.findFirst({
     where: {
       id: projectId,
       managerId: session.user.id,
     },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      startDate: true,
+      endDate: true,
+      isDone: true,
+
+      /* ===== CUSTOMERS ===== */
       customers: {
-        include: {
-          customer: true,
+        select: {
+          customer: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
         },
       },
+
+      /* ===== PROJECT FILES (IMAGE + DOCUMENT) ===== */
+      files: {
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          url: true,
+          fileName: true,
+          caption: true,
+          type: true, // IMAGE | DOCUMENT
+        },
+      },
+
+      /* ===== DAILY REPORTS ===== */
       dailyReports: {
-        orderBy: { reportDate: 'desc' },
-        include: {
-          photos: true,
+        orderBy: {
+          reportDate: 'desc',
+        },
+        select: {
+          id: true,
+          content: true,
+          reportDate: true,
+          status: true,
+          rejectNote: true,
+
+          photos: {
+            select: {
+              id: true,
+              url: true,
+              caption: true,
+            },
+          },
         },
       },
     },
   })
 
+  /* =======================
+   * NOT FOUND
+   ======================= */
   if (!project) {
     return NextResponse.json(
       { message: 'Project not found' },
@@ -42,5 +97,8 @@ export async function GET(
     )
   }
 
+  /* =======================
+   * RESPONSE
+   ======================= */
   return NextResponse.json({ project })
 }

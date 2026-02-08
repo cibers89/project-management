@@ -1,13 +1,18 @@
 'use client'
 
 import { useSearchParams, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import imageCompression from 'browser-image-compression'
 
-type PhotoDraft = {
+type UploadItem = {
+  id: string
   file: File
   preview: string
   caption: string
 }
+
+type ProgressMap = Record<string, number>
+type StatusMap = Record<string, 'processing' | 'ready'>
 
 export default function CreateDailyReportPage() {
   const params = useSearchParams()
@@ -16,9 +21,18 @@ export default function CreateDailyReportPage() {
   const projectId = params.get('projectId')
 
   const [content, setContent] = useState('')
-  const [photos, setPhotos] = useState<PhotoDraft[]>([])
+  const [photos, setPhotos] = useState<UploadItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  /* =========================
+   * UX STANDARD
+   ========================= */
+  const [imageProgress, setImageProgress] = useState<ProgressMap>({})
+  const [imageStatus, setImageStatus] = useState<StatusMap>({})
+  const [isProcessingImages, setIsProcessingImages] = useState(false)
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   if (!projectId) {
     return (
@@ -28,39 +42,91 @@ export default function CreateDailyReportPage() {
     )
   }
 
-  /* =====================
-     PHOTO HANDLERS
-  ===================== */
+  /* =========================
+   * PROGRESS SIMULATION
+   ========================= */
+  const simulateProgress = (
+    id: string,
+    setProgress: React.Dispatch<React.SetStateAction<ProgressMap>>,
+    setStatus: React.Dispatch<React.SetStateAction<StatusMap>>
+  ) => {
+    let value = 0
+    setStatus(prev => ({ ...prev, [id]: 'processing' }))
 
-  const addPhotos = (files: FileList | null) => {
+    const interval = setInterval(() => {
+      value += 10
+      setProgress(prev => ({ ...prev, [id]: value }))
+
+      if (value >= 100) {
+        clearInterval(interval)
+        setStatus(prev => ({ ...prev, [id]: 'ready' }))
+      }
+    }, 80)
+  }
+
+  /* =========================
+   * IMAGE PICKER
+   ========================= */
+  const addPhotos = async (files: FileList | null) => {
     if (!files) return
 
-    const drafts: PhotoDraft[] = Array.from(files).map(file => ({
-      file,
-      preview: URL.createObjectURL(file),
-      caption: '',
-    }))
+    setIsProcessingImages(true)
 
-    setPhotos(prev => [...prev, ...drafts])
+    try {
+      for (const original of Array.from(files)) {
+        const id = crypto.randomUUID()
+        simulateProgress(id, setImageProgress, setImageStatus)
+
+        const compressedBlob = await imageCompression(original, {
+          maxWidthOrHeight: 1600,
+          initialQuality: 0.75,
+          useWebWorker: true,
+        })
+
+        const compressedFile = new File(
+          [compressedBlob],
+          original.name,
+          { type: compressedBlob.type }
+        )
+
+        setPhotos(prev => [
+          ...prev,
+          {
+            id,
+            file: compressedFile,
+            preview: URL.createObjectURL(compressedFile),
+            caption: '',
+          },
+        ])
+      }
+    } finally {
+      setIsProcessingImages(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
   }
 
-  const removePhoto = (index: number) => {
-    setPhotos(prev => prev.filter((_, i) => i !== index))
+  const removePhoto = (id: string) => {
+    setPhotos(prev => prev.filter(p => p.id !== id))
   }
 
-  const updateCaption = (index: number, caption: string) => {
+  const updateCaption = (id: string, caption: string) => {
     setPhotos(prev =>
-      prev.map((p, i) =>
-        i === index ? { ...p, caption } : p
+      prev.map(p =>
+        p.id === id ? { ...p, caption } : p
       )
     )
   }
 
-  /* =====================
-     SUBMIT
-  ===================== */
+  const allReady = Object.values(imageStatus).every(
+    v => v === 'ready'
+  )
 
+  /* =========================
+   * SUBMIT
+   ========================= */
   const submit = async () => {
+    if (!allReady) return
+
     setLoading(true)
     setError(null)
 
@@ -93,8 +159,22 @@ export default function CreateDailyReportPage() {
     router.back()
   }
 
+  /* =========================
+   * RENDER
+   ========================= */
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
+      {isProcessingImages && (
+        <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center">
+          <div className="bg-white rounded-xl p-6 flex items-center gap-3 shadow">
+            <div className="w-5 h-5 border-2 border-gray-300 border-t-black rounded-full animate-spin" />
+            <span className="text-sm font-medium">
+              Processing images, please wait…
+            </span>
+          </div>
+        </div>
+      )}
+
       <h1 className="text-2xl font-semibold">
         Create Report
       </h1>
@@ -118,44 +198,54 @@ export default function CreateDailyReportPage() {
           Photos
         </label>
         <input
+          ref={fileInputRef}
           type="file"
           accept="image/*"
           multiple
           onChange={e => addPhotos(e.target.files)}
         />
 
-        {photos.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            {photos.map((p, i) => (
-              <div
-                key={i}
-                className="relative border rounded-xl p-3 space-y-2"
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          {photos.map(p => (
+            <div
+              key={p.id}
+              className="relative border rounded-xl p-3 space-y-2"
+            >
+              <button
+                onClick={() => removePhoto(p.id)}
+                className="absolute top-2 right-2 w-6 h-6 bg-black text-white rounded-full text-xs"
               >
-                <button
-                  onClick={() => removePhoto(i)}
-                  className="absolute top-2 right-2 w-6 h-6 bg-black text-white rounded-full text-xs"
-                >
-                  ✕
-                </button>
+                ✕
+              </button>
 
-                <img
-                  src={p.preview}
-                  className="w-full max-h-48 object-cover rounded-lg"
-                />
+              <img
+                src={p.preview}
+                className="w-full max-h-48 object-cover rounded-lg"
+              />
 
-                <input
-                  type="text"
-                  placeholder="Photo caption"
-                  className="border rounded-lg p-2 w-full text-sm"
-                  value={p.caption}
-                  onChange={e =>
-                    updateCaption(i, e.target.value)
-                  }
-                />
-              </div>
-            ))}
-          </div>
-        )}
+              {imageProgress[p.id] !== undefined && (
+                <div className="h-1 bg-gray-200 rounded">
+                  <div
+                    className="h-1 bg-black rounded"
+                    style={{
+                      width: `${imageProgress[p.id]}%`,
+                    }}
+                  />
+                </div>
+              )}
+
+              <input
+                type="text"
+                placeholder="Photo caption"
+                className="border rounded-lg p-2 w-full text-sm"
+                value={p.caption}
+                onChange={e =>
+                  updateCaption(p.id, e.target.value)
+                }
+              />
+            </div>
+          ))}
+        </div>
       </div>
 
       {error && (
@@ -166,7 +256,7 @@ export default function CreateDailyReportPage() {
 
       <button
         onClick={submit}
-        disabled={loading}
+        disabled={loading || !allReady}
         className="bg-black text-white px-6 py-3 rounded-xl disabled:opacity-50"
       >
         {loading ? 'Submitting...' : 'Submit Report'}

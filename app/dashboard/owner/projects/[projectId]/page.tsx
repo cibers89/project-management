@@ -101,6 +101,7 @@ export default function OwnerProjectDetailPage() {
   const [rejectReason, setRejectReason] = useState<Record<string, string>>({})
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   /* =======================
    * LOAD PROJECT
@@ -138,6 +139,35 @@ export default function OwnerProjectDetailPage() {
   } else if (now > end) {
     projectStatusLabel = 'Overdue'
     projectStatusClass = 'bg-red-100 text-red-700'
+  }
+
+  /* =======================
+   * MARK AS DONE (UI ONLY)
+   ======================= */
+  const allReportsApproved =
+    project.dailyReports.length > 0 &&
+    project.dailyReports.every(r => r.status === 'APPROVED')
+
+  const markAsDone = async () => {
+    setActionLoading('MARK_DONE')
+    setErrorMsg(null)
+    setSuccessMsg(null)
+
+    const res = await fetch(
+      `/api/projects/owner/${project.id}`,
+      { method: 'PATCH' }
+    )
+
+    if (!res.ok) {
+      const data = await res.json()
+      setErrorMsg(data.message || 'Failed to mark project as done')
+      setActionLoading(null)
+      return
+    }
+
+    await loadProject()
+    setSuccessMsg('✅ Project marked as done')
+    setActionLoading(null)
   }
 
   /* =======================
@@ -228,14 +258,27 @@ export default function OwnerProjectDetailPage() {
             )}
           </div>
 
-          {!project.isDone && (
-            <Link
-              href={`/dashboard/owner/projects/${project.id}/edit`}
-              className="px-3 py-2 text-sm rounded-lg border hover:bg-gray-100 w-fit"
-            >
-              ✏️ Edit
-            </Link>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {!project.isDone && (
+              <Link
+                href={`/dashboard/owner/projects/${project.id}/edit`}
+                className="px-3 py-2 text-sm rounded-lg border hover:bg-gray-100 w-fit"
+              >
+                ✏️ Edit
+              </Link>
+            )}
+
+            {/* ===== MARK AS DONE BUTTON ===== */}
+            {!project.isDone && allReportsApproved && (
+              <button
+                onClick={markAsDone}
+                disabled={actionLoading === 'MARK_DONE'}
+                className="px-3 py-2 text-sm rounded-lg bg-black text-white hover:bg-gray-800 disabled:opacity-50"
+              >
+                ✅ Mark as Done
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm text-gray-600">
@@ -317,12 +360,18 @@ export default function OwnerProjectDetailPage() {
             {successMsg}
           </div>
         )}
+
+        {errorMsg && (
+          <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+            {errorMsg}
+          </div>
+        )}
       </div>
 
-      {/* ================= PROJECT FILES ================= */}
+      {/* ================= PROJECT IMAGES ================= */}
       {project.files.filter(f => f.type === 'IMAGE').length > 0 && (
         <div className="bg-white rounded-2xl shadow p-6 space-y-4">
-          <h2 className="text-lg font-semibold">Project Files</h2>
+          <h2 className="text-lg font-semibold">Project Images</h2>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {project.files
@@ -333,13 +382,51 @@ export default function OwnerProjectDetailPage() {
                   className="border rounded-xl overflow-hidden cursor-pointer"
                   onClick={() => setPreviewUrl(img.url)}
                 >
-                  <img src={img.url} className="w-full h-40 object-cover" />
+                  <img
+                    src={img.url}
+                    className="w-full h-40 object-cover"
+                  />
                   {img.caption && (
                     <div className="p-2 text-xs text-gray-600 bg-gray-50 break-words">
                       {img.caption}
                     </div>
                   )}
                 </div>
+              ))}
+          </div>
+        </div>
+      )}
+
+      {/* ================= PROJECT DOCUMENTS ================= */}
+      {project.files.filter(f => f.type === 'DOCUMENT').length > 0 && (
+        <div className="bg-white rounded-2xl shadow p-6 space-y-4">
+          <h2 className="text-lg font-semibold">Project Documents</h2>
+
+          <div className="space-y-2">
+            {project.files
+              .filter(f => f.type === 'DOCUMENT')
+              .map(file => (
+                <a
+                  key={file.id}
+                  href={file.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-start gap-3 border rounded-xl p-3 hover:bg-gray-50"
+                >
+                  <div className="text-2xl">📄</div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium break-words">
+                      {file.fileName || 'Document'}
+                    </div>
+
+                    {file.caption && (
+                      <div className="text-xs text-gray-600 mt-1 break-words">
+                        {file.caption}
+                      </div>
+                    )}
+                  </div>
+                </a>
               ))}
           </div>
         </div>
@@ -360,14 +447,20 @@ export default function OwnerProjectDetailPage() {
           return (
             <div key={report.id} className="border-t">
               <button
-                onClick={() => setOpenReportId(open ? null : report.id)}
+                onClick={() =>
+                  setOpenReportId(open ? null : report.id)
+                }
                 className="w-full text-left p-5 flex justify-between items-center"
               >
                 <div className="space-y-1 text-sm text-gray-600">
                   <div>
-                    Submitted by {report.createdBy.name || report.createdBy.email}
+                    Submitted by{' '}
+                    {report.createdBy.name ||
+                      report.createdBy.email}
                     {' • '}
-                    {new Date(report.createdAt).toLocaleString()}
+                    {new Date(
+                      report.createdAt
+                    ).toLocaleString()}
                   </div>
                   {reportStatusBadge(report.status)}
                 </div>
@@ -376,7 +469,9 @@ export default function OwnerProjectDetailPage() {
 
               {open && (
                 <div className="px-5 pb-5 space-y-4">
-                  <p className="whitespace-pre-line">{report.content}</p>
+                  <p className="whitespace-pre-line">
+                    {report.content}
+                  </p>
 
                   {photos.length > 0 && (
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -384,7 +479,9 @@ export default function OwnerProjectDetailPage() {
                         <div
                           key={photo.id}
                           className="border rounded-xl overflow-hidden cursor-pointer"
-                          onClick={() => setPreviewUrl(photo.url)}
+                          onClick={() =>
+                            setPreviewUrl(photo.url)
+                          }
                         >
                           <img
                             src={photo.url}
@@ -416,15 +513,23 @@ export default function OwnerProjectDetailPage() {
 
                       <div className="flex gap-2">
                         <button
-                          onClick={() => approveReport(report.id)}
-                          disabled={actionLoading === report.id}
+                          onClick={() =>
+                            approveReport(report.id)
+                          }
+                          disabled={
+                            actionLoading === report.id
+                          }
                           className="px-3 py-2 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
                         >
                           Approve
                         </button>
                         <button
-                          onClick={() => rejectReport(report.id)}
-                          disabled={actionLoading === report.id}
+                          onClick={() =>
+                            rejectReport(report.id)
+                          }
+                          disabled={
+                            actionLoading === report.id
+                          }
                           className="px-3 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
                         >
                           Decline
@@ -433,11 +538,13 @@ export default function OwnerProjectDetailPage() {
                     </div>
                   )}
 
-                  {report.status === 'REJECTED' && report.rejectNote && (
-                    <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl p-3">
-                      <b>Reject Reason:</b> {report.rejectNote}
-                    </div>
-                  )}
+                  {report.status === 'REJECTED' &&
+                    report.rejectNote && (
+                      <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl p-3">
+                        <b>Reject Reason:</b>{' '}
+                        {report.rejectNote}
+                      </div>
+                    )}
                 </div>
               )}
             </div>

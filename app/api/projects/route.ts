@@ -3,8 +3,8 @@ export const runtime = 'nodejs'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import fs from 'fs/promises'
-import path from 'path'
+import { logAudit } from '@/lib/audit'
+import { put } from '@vercel/blob'
 
 /**
  * ======================================================
@@ -59,6 +59,7 @@ export async function GET() {
  * ======================================================
  * POST /api/projects
  * OWNER ONLY — FormData
+ * (Vercel Blob + Audit, PRODUCTION SAFE)
  * ======================================================
  */
 export async function POST(req: Request) {
@@ -86,7 +87,7 @@ export async function POST(req: Request) {
   const files = formData.getAll('files') as File[]
   const fileCaptions = formData.getAll('fileCaptions') as string[]
 
-  // 🔐 VALIDATION (INI YANG TADI BIKIN 400)
+  // 🔐 VALIDATION (TETAP SAMA)
   if (!name || !startDate || !endDate || !managerId) {
     return NextResponse.json(
       {
@@ -99,7 +100,7 @@ export async function POST(req: Request) {
 
   /**
    * =========================
-   * CREATE PROJECT
+   * CREATE PROJECT (PRISMA)
    * =========================
    */
   const project = await prisma.project.create({
@@ -118,26 +119,24 @@ export async function POST(req: Request) {
 
   /**
    * =========================
-   * FILE SYSTEM
-   * =========================
-   */
-  const uploadDir = path.join(process.cwd(), 'public/uploads')
-  await fs.mkdir(uploadDir, { recursive: true })
-
-  /**
-   * =========================
-   * SAVE IMAGES
+   * UPLOAD IMAGES — VERCEL BLOB
    * =========================
    */
   for (let i = 0; i < images.length; i++) {
     const img = images[i]
     if (!img || typeof img === 'string') continue
+	
+	console.log(
+	  'BLOB TOKEN EXISTS:',
+	  !!process.env.BLOB_READ_WRITE_TOKEN
+	)
 
-    const buffer = Buffer.from(await img.arrayBuffer())
-    const storedName = `${Date.now()}-${img.name}`
-    const filePath = path.join(uploadDir, storedName)
 
-    await fs.writeFile(filePath, buffer)
+    const blob = await put(
+      `projects/${project.id}/images/${Date.now()}-${img.name}`,
+      img,
+      { access: 'public' }
+    )
 
     await prisma.projectFile.create({
       data: {
@@ -145,25 +144,25 @@ export async function POST(req: Request) {
         type: 'IMAGE',
         fileName: img.name,
         caption: imageCaptions[i] || '',
-        url: `/uploads/${storedName}`,
+        url: blob.url,
       },
     })
   }
 
   /**
    * =========================
-   * SAVE FILES
+   * UPLOAD FILES — VERCEL BLOB
    * =========================
    */
   for (let i = 0; i < files.length; i++) {
     const file = files[i]
     if (!file || typeof file === 'string') continue
 
-    const buffer = Buffer.from(await file.arrayBuffer())
-    const storedName = `${Date.now()}-${file.name}`
-    const filePath = path.join(uploadDir, storedName)
-
-    await fs.writeFile(filePath, buffer)
+    const blob = await put(
+      `projects/${project.id}/documents/${Date.now()}-${file.name}`,
+      file,
+      { access: 'public' }
+    )
 
     await prisma.projectFile.create({
       data: {
@@ -171,10 +170,30 @@ export async function POST(req: Request) {
         type: 'DOCUMENT',
         fileName: file.name,
         caption: fileCaptions[i] || '',
-        url: `/uploads/${storedName}`,
+        url: blob.url,
       },
     })
   }
+
+  /**
+   * =========================
+   * AUDIT — CREATE PROJECT
+   * (BEST EFFORT, NON BLOCKING)
+   * =========================
+   */
+  logAudit({
+    session,
+    action: 'CREATE_PROJECT',
+    entity: 'PROJECT',
+    entityId: project.id,
+    meta: {
+      name,
+      managerId,
+      customerCount: customerIds.length,
+      imageCount: images.length,
+      fileCount: files.length,
+    },
+  }).catch(() => {})
 
   return NextResponse.json({
     success: true,

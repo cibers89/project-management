@@ -44,6 +44,9 @@ export default function CreateProjectPage() {
   const [imageStatus, setImageStatus] = useState<StatusMap>({})
   const [fileStatus, setFileStatus] = useState<StatusMap>({})
 
+  // UX overlay while processing images BEFORE thumbnails appear
+  const [isProcessingImages, setIsProcessingImages] = useState(false)
+
   const imageInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -95,31 +98,35 @@ export default function CreateProjectPage() {
    ========================= */
   const handleImagePick = async (filesList: FileList | null) => {
     if (!filesList) return
+    setIsProcessingImages(true)
 
-    for (const originalFile of Array.from(filesList)) {
-      const id = crypto.randomUUID()
-      simulateProgress(id, setImageProgress, setImageStatus)
+    try {
+      for (const originalFile of Array.from(filesList)) {
+        const id = crypto.randomUUID()
+        simulateProgress(id, setImageProgress, setImageStatus)
 
-      const compressed = await imageCompression(originalFile, {
-        maxWidthOrHeight: 1600,
-        initialQuality: 0.75,
-        useWebWorker: true,
-      })
+        const compressed = await imageCompression(originalFile, {
+          maxWidthOrHeight: 1600,
+          initialQuality: 0.75,
+          useWebWorker: true,
+        })
 
-      const preview = URL.createObjectURL(compressed)
+        const preview = URL.createObjectURL(compressed)
 
-      setImages(prev => [
-        ...prev,
-        {
-          id,
-          file: compressed,
-          preview,
-          caption: '',
-        },
-      ])
+        setImages(prev => [
+          ...prev,
+          {
+            id,
+            file: compressed,
+            preview,
+            caption: '',
+          },
+        ])
+      }
+    } finally {
+      setIsProcessingImages(false)
+      if (imageInputRef.current) imageInputRef.current.value = ''
     }
-
-    if (imageInputRef.current) imageInputRef.current.value = ''
   }
 
   const handleFilePick = (filesList: FileList | null) => {
@@ -221,6 +228,17 @@ export default function CreateProjectPage() {
    ========================= */
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-8">
+      {isProcessingImages && (
+        <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center">
+          <div className="bg-white rounded-xl p-6 flex items-center gap-3 shadow">
+            <div className="w-5 h-5 border-2 border-gray-300 border-t-black rounded-full animate-spin" />
+            <span className="text-sm font-medium">
+              Processing images, please wait…
+            </span>
+          </div>
+        </div>
+      )}
+
       <h1 className="text-2xl font-semibold">Create New Project</h1>
 
       {/* PROJECT INFO */}
